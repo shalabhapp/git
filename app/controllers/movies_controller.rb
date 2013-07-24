@@ -7,24 +7,35 @@ class MoviesController < ApplicationController
   end
 
   def index
-    session[:params] ||= {}
-    old = session[:params]
-
-    redirect_to movies_path({:q => old[:q], :ratings => old[:ratings]}) if (params[:q].blank? && old[:q].present?) || (params[:ratings].blank? && old[:ratings].present?)
-
-    params[:q] = old[:q] if params[:q].nil?
-    params[:ratings] = old[:ratings] if params[:ratings].nil?
-
-    session[:params] = {:q => params[:q], :ratings => params[:ratings]}
-    params = session[:params]
-
-    @all_ratings = Movie::RATINGS
-
-    movie = Movie
-    movie = movie.where('rating in (?)', params[:ratings].keys) if params[:ratings]
-
-    @q = movie.search(params[:q])
-    @movies = @q.result(:distinct => true)
+    @all_ratings = Movie.all_ratings
+    @selected_ratings = @all_ratings if @selected_ratings.nil?
+    if session[:sort_by] != params[:sort_by] and !params[:sort_by].nil?
+      session[:sort_by] = params[:sort_by]
+    end
+    if session[:ratings] != params[:ratings] and !params[:ratings].nil?
+      session[:ratings] = params[:ratings]
+    end
+    if params[:sort_by].nil? && params[:ratings].nil? && (!session[:sort_by].nil? || !session[:ratings].nil?)
+      redirect_to movies_path(:sort_by => session[:sort_by], :ratings => session[:ratings])
+    end
+    @sort_by = session[:sort_by]
+    @ratings = session[:ratings]
+    if session[:ratings].nil?
+      ratings = Movie.all_ratings
+    else
+      ratings = @ratings.keys
+    end
+    @selected_ratings = ratings
+    if @sort_by.nil?
+      @movies = Movie.find_all_by_rating(ratings)
+    else
+      begin
+        @movies = Movie.order("#{@sort_by} ASC").find_all_by_rating(ratings)
+      rescue ActiveRecord::StatementInvalid
+        flash[:warning] = "Movies cannot be sorted by this order"
+        @movies = Movie.find_all_by_rating(ratings)
+      end
+    end
   end
 
   def new
